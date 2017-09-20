@@ -1,0 +1,9 @@
+# IVA_python
+Inversion Velocity Analysis Code in 1D/2D
+
+This is a pythonified version of the Code I wrote during my PhD thesis (full Fortran 90). The most computer-expensive part will remain in Fortran and I need to make all f2py, python, mpi work together...
+Work in progress...
+
+The code should implement the theory exposed in (Chauris and Cocher, 2017) and (Cocher et al., 2017).
+
+More details to come...
