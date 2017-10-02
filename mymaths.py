@@ -6,6 +6,7 @@ Created on Wed Jul 26 17:25:56 2017
 """
 
 import numpy as np
+from prec import quad
 
 def SmoothSin(a):
         """ Creates a smoothing function monotically mapping the interval
@@ -15,4 +16,4 @@ def SmoothSin(a):
         a, float
         ----------
         """
-        return np.square( np.sin( np.pi*np.float(a)/2. ) ) 
+        return np.square( np.sin( np.pi*quad(a)/quad(2) ) )
