@@ -51,7 +51,7 @@ def calcS0(src,zsrc,isrc,dz,dx,noff,ntt,nz,nxx):
     S0[0:nsrc,izsrc,ispos] = src/(dx*dz)
     return S0
 
-def verifCond(dz, dx, dt, fmax, vmin, vmax, mode1D2D):
+def verifCond(dz, dx, dt, fmax, vmin, vmax, mode1D2D, rank):
     """ checks if current parameters satisfy stability and dispertion conditions
     Parameters
     ----------
@@ -63,6 +63,8 @@ def verifCond(dz, dx, dt, fmax, vmin, vmax, mode1D2D):
     vmax: max value of velocity model
     mode1D2D : int, 1D or 2D case
     """
+    #
+    okprint = (rank == np.int(0))
     # Initialisation
     okDispersionZ = False
     okDispersionX = False
@@ -74,28 +76,38 @@ def verifCond(dz, dx, dt, fmax, vmin, vmax, mode1D2D):
         dtmax = dz / vmax # in 1D
     if mode1D2D == np.int(2):
         dtmax = dz / (vmax * np.sqrt(2)) # in 2d
-    print('----------------------------------------------------------')
+    if okprint:
+        print('----------------------------------------------------------')
     # Dispersion
-    print('Dispersion condition...')
+    if okprint:
+        print('Dispersion condition...')
     if (dz <= dzmax):
         okDispersionZ = True
-        print ('   dz = %5.3f m  ; dzmax = %5.3f m  --- ok!' %(dz,dzmax))
+        if okprint:
+            print ('   dz = %5.3f m  ; dzmax = %5.3f m  --- ok!' %(dz,dzmax))
     else:
-        print ('   dz = %5.3f m  ; dzmax = %5.3f m  --- !!! problem !!!' %(dz,dzmax))
+        if okprint:
+            print ('   dz = %5.3f m  ; dzmax = %5.3f m  --- !!! problem !!!' %(dz,dzmax))
     if (mode1D2D == np.int(2)):
         if (dx <= dxmax):
             okDispersionX = True
-            print ('   dx = %5.3f m  ; dxmax = %5.3f m  --- ok!' %(dx,dxmax))
+            if okprint:
+                print ('   dx = %5.3f m  ; dxmax = %5.3f m  --- ok!' %(dx,dxmax))
         else:
-            print ('   dx = %5.3f m  ; dxmax = %5.3f m  --- !!! problem !!!' %(dx,dxmax))
+            if okprint:
+                print ('   dx = %5.3f m  ; dxmax = %5.3f m  --- !!! problem !!!' %(dx,dxmax))
     # Stability
-    print('Stability condition...')
+    if okprint:
+        print('Stability condition...')
     if (dt <= dtmax):
         okStability = True
-        print ('   dt = %5.3f ms ; dtmax = %5.3f ms --- ok!' %(dt*1000,dtmax*1000))
+        if okprint:
+            print ('   dt = %5.3f ms ; dtmax = %5.3f ms --- ok!' %(dt*1000,dtmax*1000))
     else:
-        print ('   dt = %5.3f ms ; dtmax = %5.3f ms --- !!! problem !!!' %(dt*1000,dtmax*1000))
+        if okprint:
+            print ('   dt = %5.3f ms ; dtmax = %5.3f ms --- !!! problem !!!' %(dt*1000,dtmax*1000))
     #
-    print('----------------------------------------------------------')
+    if okprint:
+        print('----------------------------------------------------------',flush=True)
     ok = okStability and okDispersionZ and (okDispersionX or (mode1D2D == np.int(1)))
     return ok

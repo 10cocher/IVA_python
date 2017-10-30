@@ -49,6 +49,7 @@ if __name__=="__main__":
     tax = np.linspace(tmin,  tmax, num=ntt,  dtype=myfloat)
     sax = np.linspace(-tsrc, tsrc, num=nsrc, dtype=myfloat)
     offax = np.linspace(offmin, offmax, num=noff, dtype=myfloat)
+
     #%%
     def createStack(P,limP,ax,offmin,offmax,zmin,zmax,tax):
         ntt  = P.shape[0]
@@ -63,25 +64,66 @@ if __name__=="__main__":
             #im.set_title('t = %5.3f' %(tax[it]))
             ims.append([im,title])
         return ims
-    #%%
+    #%% subrtouine to read files
     def readWavefield(folder,name):
         P = np.load(folder + name + '.npy')
         limP = np.amax(np.abs(P))
         return P, limP
-    #%%
+    def readXi(folder,name):
+        return readWavefield(folder,name)
+    #%% Observed data and velocity models
+    isrc = 128
+    if mode1D2D == np.int(1):
+        Pobs, limPobs = readWavefield(folder,'Pobs')
+    else:
+        Pobs, limPobs = readWavefield(folder,'Pobs_%06i'%(isrc))
     #
-#    for it in np.arange(0,ntt,dtype=int):
-#        S0_P[it,:,:] = 0
-#        S0_P[it,0:20,:] = np.mod(it,2)+3
+    vini = np.load(folder + 'vini.npy')
+    vmod = np.load(folder + 'vmod.npy')
+    #
+    fig = plt.figure('vmod and ximod')
+    #
+    ax1 = fig.add_subplot(221)
+    glib.plot_Pobs(ax1, Pobs, tax, tmin, tmax, offmin, offmax, nsrc, mode1D2D, True)
+    #
+    ax2 = fig.add_subplot(222)
+    glib.plot_vel(ax2, vmod, vmin, vmax, zax, zmin, zmax, xmin, xmax, mode1D2D, 'vmod')
+    #
+    ax3 = fig.add_subplot(223)
+    glib.plot_vel(ax3, vini, vmin, vmax, zax, zmin, zmax, xmin, xmax, mode1D2D, 'vini')
+    #glib.plot_vmod(ax2, vmod, vini, zax)
+    #ax2.plot(zax,np.squeeze(vmod),zax,np.squeeze(vini))
+    #
+    #%% compares adjoint and inverse reflectivity
+    #
+    xiadj, limxiadj = readWavefield(folder,'xiadj')
+    #
+    if mode1D2D==np.int(1):
+        fig2 = plt.figure('test adjoint')
+        ax2 = fig2.add_subplot(222)
+        glib.plot_xi_1D(ax2, xiadj, zax, 'xi adjoint')
+    else:
+        fig2 = plt.figure('test adjoint')
+        ax1 = fig2.add_subplot(221)
+        ax2 = fig2.add_subplot(224)
         #
+        glib.plot_xi_zx( ax1, xiadj, xmin, xmax, zmin, zmax, title='xiadj')
+        glib.plot_xi_CIG(ax2, xiadj, xax, hmin, hmax, zmin, zmax, title='xiadj')
+        #
+        #ax3 = fig2.add_subplot(2,2,3)
+        #glib.plot_wvfld_1D(ax3,np.squeeze(sw),tmin,tmax,zmin,zmax)
+        #
+        #ax4 = fig2.add_subplot(2,2,4)
+        #glib.plot_wvfld_1D(ax4,np.squeeze(rw),tmin,tmax,zmin,zmax)
+
     #%%
-    isrc = 92
-    if True:
+    isrc = 128
+    if False:
         Pobs, limPobs = readWavefield(folder,'Pobs_%06i'%(isrc))
         #
         fig = plt.figure('Pobs at ix=%i m' %(isrc))
         ax1 = fig.add_subplot(111)
-        glib.plot_Pobs_2D(ax1, Pobs, tmin, tmax, offmin, offmax, nsrc, True)
+        glib.plot_Pobs(ax1, Pobs, tax, tmin, tmax, offmin, offmax, nsrc, mode1D2D, True)
     #
     #%%
     if False:

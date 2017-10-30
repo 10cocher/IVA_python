@@ -8,7 +8,7 @@ MODULE propag
   !include "param.h"
   !
   PRIVATE
-  PUBLIC calcS0,calcPropag,calcKP1
+  PUBLIC calcS0, calcPropag, calcKP1, calcQ
 CONTAINS
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   SUBROUTINE calcKP1(K,P0,xiin,cfv,dh,dt,xizero,order,backforw,mode1D2D,&
@@ -86,6 +86,83 @@ CONTAINS
     !-------------------------------
   END SUBROUTINE calcKP1
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  !PURE SUBROUTINE calcQ_1D(Q,P,L,orderQ,dt,nh,ntt,nz,nx)
+    !IMPLICIT NONE
+    !!Parameters
+    !REAL(4),DIMENSION(nz,nx,nh) ,INTENT(out) :: Q
+    !REAL(4),DIMENSION(ntt,nz,nx),INTENT(in)  :: P,L
+    !REAL(4)                     ,INTENT(in)  :: dt
+    !INTEGER                      ,INTENT(in)  :: nx,nz,nh,ntt,orderQ
+    !!Local variables
+    !REAL(4),DIMENSION(:,:,:),ALLOCATABLE :: Pder
+    !!INTEGER :: ih,nh2,xmin,xmax,lmin,pmin,ix,nxx,iz
+    !!
+    !!nh2=(nh-1)/2
+    !!
+    !ALLOCATE(Pder(ntt,nz,nx))
+    !!
+    !SELECT CASE (orderQ)
+    !CASE (-1)
+    !   CALL int1x(Pder,P,dt,ntt,nz,nx)
+    !CASE (2)
+    !   CALL dev2x(Pder,P,dt,ntt,nz,nx)
+    !CASE DEFAULT
+    !   Pder(:,:,:) = 0._4
+    !END SELECT
+    !!
+    !Q(:,:,:)=0._4
+    !!
+    !Q(:,:,1)=dt*SUM(Pder*L,dim=1)
+    !!
+    !DEALLOCATE(Pder)
+    !!
+  !END SUBROUTINE calcQ_1D
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PURE SUBROUTINE calcQ(Q,P,L,orderQ,dt,nh,ntt,nz,nx)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(nz,nx,nh) ,INTENT(out) :: Q
+    REAL(4),DIMENSION(ntt,nz,nx),INTENT(in)  :: P,L
+    REAL(4)                     ,INTENT(in)  :: dt
+    INTEGER                      ,INTENT(in)  :: nx,nz,nh,ntt,orderQ
+    !Local variables
+    REAL(4),DIMENSION(:,:,:),ALLOCATABLE :: Pder
+    INTEGER :: ih,nh2,xmin,xmax,lmin,pmin,ix,nxx,iz
+    !
+    nh2=(nh-1)/2
+    !
+    ALLOCATE(Pder(ntt,nz,nx))
+    !
+    SELECT CASE (orderQ)
+    CASE (-1)
+       CALL int1x(Pder,P,dt,ntt,nz,nx)
+    CASE (2)
+       CALL dev2x(Pder,P,dt,ntt,nz,nx)
+    CASE DEFAULT
+       Pder(:,:,:) = 0._4
+    END SELECT
+    !
+    Q(:,:,:)=0._4
+    !
+    DO ih=-nh2,nh2
+       xmin=1 +abs(ih)
+       xmax=nx-abs(ih)
+       nxx=xmax-xmin+1
+       pmin=max(1 ,1 -2*ih)
+       lmin=max(1 ,1 +2*ih)
+       DO ix=0,nxx-1
+          DO iz=1,nz
+             Q(iz,xmin+ix,ih+nh2+1)=dt*&
+                  SUM(Pder(:,iz,pmin+ix)*L(:,iz,lmin+ix),dim=1)
+          END DO
+       END DO
+    END DO
+    !
+    DEALLOCATE(Pder)
+    !
+  END SUBROUTINE calcQ
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !SUBROUTINE calcKP1(K,P0,xi,cfv,dt,nz,ntt,order)
   !IMPLICIT NONE
   !!Parameters
@@ -143,6 +220,7 @@ CONTAINS
     ELSE ! backward propagation
        !
        ALLOCATE(Q(ntt,nz,nx),K(ntt,nz,nx))
+       !
        Q(:,:,:)=S(ntt:1:-1,:,:)
        !
        SELECT CASE (mode1D2D)
@@ -150,8 +228,10 @@ CONTAINS
           CALL findiff1D(K,Q,v0,dz,dt,nz,ntt)
        CASE (2) ! 2D propagation
           CALL findiff2D(K,Q,v0,vmin,vmax,dx,dz,dt,npml,nx,nz,ntt)
-          P(:,:,:)=K(ntt:1:-1,:,:)
        END SELECT
+       !
+       P(:,:,:)=K(ntt:1:-1,:,:)
+       !
        DEALLOCATE(Q,K)
     END IF
   END SUBROUTINE calcPropag

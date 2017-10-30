@@ -101,12 +101,31 @@ if __name__=="__main__":
     #%%
     MethQ    = np.int(1)
     MethDcnv = np.int(1)
+    #%% Safeguards for the 1D case
+    if mode1D2D == np.int(1):
+        # removes tapers along x and h directions for extended model vectors
+        ptap[3] = quad(0)
+        ptap[4] = quad(0)
+        if (MethTap2 >= 4):
+            MethTap2 = 4
+        else:
+            MethTap2 = 0
+            MethTap  = 0
+        if (MethTpR2 >=4):
+            MethTpR2 = 4
+        else:
+            MethTpR2 = 0
+            MethTpRg = 0
+        # no tapers on the acquisition
+        MethTapS = 0
+        if (MethTapD >= 2):
+            MethTapD = MethTapD - 2
     #%%
     PMeths = np.array([MethJxi , MethXi, MethTap ,MethTap2, MethMR,
                        MethTapD, MethQ , MethDcnv,MethAcq2], dtype=int)
     #%% spatial dimensions
-    zmin = quad(   0) ; zmax=quad( 600) ;  dz=quad(5) ; nz=np.int(np.floor((zmax-zmin)/dz))
-    xmin = quad(   0) ; xmax=quad(1000) ;  dx=quad(5) ; nx=np.int(np.floor((xmax-xmin)/dx))
+    zmin = quad(   0) ; zmax=quad( 500) ;  dz=quad(6) ; nz=np.int(np.floor((zmax-zmin)/dz))
+    xmin = quad(   0) ; xmax=quad(1600) ;  dx=quad(6) ; nx=np.int(np.floor((xmax-xmin)/dx))
     hmin = quad(-180) ; hmax=-hmin      ;  dh=dx      ; nh=np.int(np.floor((hmax-hmin)/dh))
     if mode1D2D == np.int(1):
         xmin = quad(0) ; xmax = quad(0) ; dx = quad(1) ; nx = np.int(1)
@@ -114,7 +133,7 @@ if __name__=="__main__":
     #%% temporal dimension
     tmin = quad(0) ; tmax=quad(0.5) ; dt=quad(0.001) ; nt=np.int(np.floor((tmax-tmin)/dt))
     #%% simulation of wave propagation around source bewteen -maxoffR and +maxoffR
-    maxoffR = quad(400) # in meters
+    maxoffR = quad(600) # in meters
     if mode1D2D == np.int(1):
         maxoffR = quad(0)
     maxoff = np.int(np.floor(maxoffR/dx))
@@ -124,8 +143,8 @@ if __name__=="__main__":
     izsrc = np.int(1) ;  zsrc = izsrc * dz
     # lateral position of sources
     # typically every 'ds' between xSlim[0] and xSlim[1] and between xSlim[2] and xSlim[3]
-    xSlim = np.array([450., 450., 450., 465.], dtype=myfloat)
-    ds = np.int(1)
+    xSlim = np.array([xmin, 450., 450., xmax], dtype=myfloat)
+    ds = np.int(8)
     sOKs = False # forces symmetric sources repartition
     sOKf = False # forces sources to be at xSlim[1] and xSlim[2]
     # lateral positions of the sources on the grid
@@ -135,7 +154,7 @@ if __name__=="__main__":
     ns = slist.shape[0]
     ## careful : slist starts at 0, maybe a problem when passing to Fortran...
     # receivers position
-    xRlim = np.array([-400., 400.], dtype=myfloat)
+    xRlim = np.array([-600., 600.], dtype=myfloat)
     zVSP  = np.array([ 100., 200.], dtype=myfloat)
     if MethAcq2==0 :
         nrcv = noff
@@ -162,20 +181,21 @@ if __name__=="__main__":
     #%% vmin and vmax (in meter/second)
     vmin = quad(2450)
     vmax = quad(3050)
+
     #%% print all dimensions
     if rank == np.int(0):
-        print('----------------------------------------------------------')
-        print('     nz = %4i ; dz = %5.3f m' %(nz,dz))
-        print('     nx = %4i ; dx = %5.3f m' %(nx,dx))
-        print('     nh = %4i ; dh = %5.3f m' %(nh,dh))
-        print('     nt = %4i ; dt = %5.3f ms (positive time samples)' %(nt,dt*1000))
-        print('    ntt = %4i (neg. and pos. time samples)' %(ntt))
-        print('   nsrc = %4i (number of time samples for src wavelet)' %(nsrc))
-        print('nstotal = %4i ; ds = %2i (total number of sources in the acquisition)' %(nstotal,ds))
-        print('     ns = %4i (number of sources treated by this processor)' %(ns))
-        print('   nrcv = %4i' %(nrcv))
-        print('   noff = %4i' %(noff))
-        print('----------------------------------------------------------')
+        print('----------------------------------------------------------', flush=True)
+        print('     nz = %4i ; dz = %5.3f m' %(nz,dz), flush=True)
+        print('     nx = %4i ; dx = %5.3f m' %(nx,dx), flush=True)
+        print('     nh = %4i ; dh = %5.3f m' %(nh,dh), flush=True)
+        print('     nt = %4i ; dt = %5.3f ms (positive time samples)' %(nt,dt*1000), flush=True)
+        print('    ntt = %4i (neg. and pos. time samples)' %(ntt), flush=True)
+        print('   nsrc = %4i (number of time samples for src wavelet)' %(nsrc), flush=True)
+        print('nstotal = %4i ; ds = %2i (total number of sources in the acquisition)' %(nstotal,ds), flush=True)
+        print('     ns = %4i (number of sources treated by this processor)' %(ns), flush=True)
+        print('   nrcv = %4i' %(nrcv), flush=True)
+        print('   noff = %4i' %(noff), flush=True)
+        print('----------------------------------------------------------', flush=True)
     #%% stores param in a python-readable file
     if rank == np.int(0):
         f = open(folder + 'param.pckl', 'wb')
@@ -193,7 +213,7 @@ if __name__=="__main__":
     sax = np.linspace(-tsrc, tsrc, num=nsrc, dtype=myfloat)
     #%% checks stability and dispersion conditions
     #if rank == np.int(0):
-    ok = prop_py.verifCond(dz, dx, dt, fmax, vmin, vmax, mode1D2D)
+    ok = prop_py.verifCond(dz, dx, dt, fmax, vmin, vmax, mode1D2D, rank)
     #if do_mpi:
     #comm.Bcast([ok, MPI.LOGICAL], root=0)
     #print('rank=%2i, ok=%l' %(rank,ok))
@@ -212,26 +232,44 @@ if __name__=="__main__":
         np.save(folder + 'vmod.npy',vmod)
         np.save(folder + 'vini.npy',vini)
     #%% for the example
-    isrc = np.int(maxoff+1)
-    if mode1D2D == np.int(1):
-        isrc = np.int(0)
-    nxx = noff
-    cfvmod = quad(4)/(vmod**2)
+    #isrc = np.int(maxoff+1)
+    #if mode1D2D == np.int(1):
+        #isrc = np.int(0)
+    #nxx = noff
+    #cfvmod = quad(4)/(vmod**2)
     #%%
 
-    #%%
+    #%% Compute observed data
     t1 = time.time()
-    Pobs, Pobszero = prop.linop.flin(ximod,vmod,src,rOK,Mtap,ptap,zsrc,\
-                                     dx,dh,dz,dt,vmin,vmax,PMeths,ximodzero,\
-                                    stap,slist,mode1D2D,fcomm, npml,noff,ntt)
+    Pobs, Pobszero = prop.linop.flin(ximod,ximodzero,vmod,src,rOK,Mtap,ptap,\
+                                     zsrc,dx,dh,dz,dt,vmin,vmax,PMeths,\
+                                     stap,slist,mode1D2D,fcomm, npml,noff,ntt)
     t2 = time.time()
-    print('calcPobs took %8.3f seconds' %(t2-t1))
+    if rank == np.int(0):
+        print('calcPobs took %8.3f seconds' %(t2-t1), flush=True)
+    #%% Migration (using adjoint operator Fadj)
+    t1 = time.time()
+    xiadj, xizero = prop.linop.fadj(Pobs,Pobszero,vini,src,rOK,Mtap,ptap,zsrc,\
+                                 dx,dh,dz,dt,vmin,vmax,PMeths,stap,slist,\
+                                 mode1D2D,fcomm,npml,noff,nh)
+    t2 = time.time()
+    if rank == np.int(0):
+        print('Fadj took %8.3f seconds' %(t2-t1), flush=True)
+    #%% Save results
+    #--- Pobs ---
     for isrc in np.arange(0, ns, dtype=int):
-        name = folder + 'Pobs_%06i' %(slist[isrc]) + '.npy'
-        np.save(name,Pobs[:,:,isrc])
-    mystop(do_mpi,comm,rank)
+        if mode1D2D == np.int(1):
+            name = folder + 'Pobs' + '.npy'
+            np.save(name,Pobs)
+        if mode1D2D == np.int(2):
+            name = folder + 'Pobs_%06i' %(slist[isrc]) + '.npy'
+            np.save(name,Pobs[:,:,isrc])
+    #--- xi adjoint ---
+    if (rank == np.int(0)):
+        name = folder + 'xiadj' + '.npy'
+        np.save(name,xiadj)
     #%%
-    mystop(do_mpi,comm,rank)
+    #mystop(do_mpi,comm,rank)
     #%%
     #S0_P = prop_py.calcS0(src,zsrc,isrc,dz,dx,noff,ntt,nz,nxx);
     # with fortran

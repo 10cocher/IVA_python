@@ -3,7 +3,7 @@ MODULE dataspace
   USE maths!, ONLY: SmoothSin, deftapX, deftapX2, deftapXdisym
   !
   PRIVATE
-  PUBLIC projectDobs, projectD, taperData, srcminmax,&
+  PUBLIC projectDobs, projectD, taperData, srcminmax, calcKL3,&
        defMR2, taperLine, talpha
   !
 CONTAINS
@@ -88,6 +88,17 @@ CONTAINS
     END SELECT
     !
   END SUBROUTINE projectD
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PURE SUBROUTINE calcKL3(K,S,dz,ntt,nz,nx)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(ntt,nz,nx),INTENT(out) :: K
+    REAL(4),DIMENSION(ntt,nz,nx),INTENT(in)  :: S
+    REAL(4)                     ,INTENT(in)  :: dz
+    INTEGER                      ,INTENT(in)  :: nx,nz,ntt
+    !Local variables
+    K=S/dz
+  END SUBROUTINE calcKL3
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -170,6 +181,7 @@ CONTAINS
        !CASE DEFAULT
        !IF (rang.EQ.0) WRITE(UNIT=*,FMT="(A)") "MethTapD not defined in defMR2"
     END SELECT
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     expMR=Mtap(1)
     Tapod=FLOOR(Mtap(2)/dt)
@@ -302,6 +314,7 @@ CONTAINS
              tap(rmin:rmax)=1._4
           END IF
           Xwindow=min(Xapod,max(2,nr/3))
+          IF (nr.EQ.1) Xwindow = 1
           CALL deftapX2(tap(rmin:rmax),Xwindow,nr)
        END IF
     END DO
