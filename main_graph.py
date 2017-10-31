@@ -20,7 +20,7 @@ if __name__=="__main__":
     folder = 'out/'
     f = open(folder + 'param.pckl', 'rb')
     nz, nx, nh, nt, ntt, nsrc, nstotal, ns, nrcv, noff,\
-    dz, dx, dh, dt, ds,\
+    dz, dx, dh, dt, dsint,\
     zmin, zmax, xmin, xmax, hmin, hmax, tmin, tmax, tsrc,\
     vmin, vmax, mode1D2D,\
     = pickle.load(f)
@@ -37,14 +37,14 @@ if __name__=="__main__":
     print('     nt = %4i ; dt = %5.3f ms (positive time samples)' %(nt,dt*1000))
     print('    ntt = %4i (neg. and pos. time samples)' %(ntt))
     print('   nsrc = %4i (number of time samples for src wavelet)' %(nsrc))
-    print('nstotal = %4i ; ds = %2i (total number of sources in the acquisition)' %(nstotal,ds))
+    print('nstotal = %4i ; ds = %2i (total number of sources in the acquisition)' %(nstotal,dsint))
     print('     ns = %4i (number of sources treated by this processor)' %(ns))
     print('   nrcv = %4i' %(nrcv))
     print('   noff = %4i' %(noff))
     print('----------------------------------------------------------')
     #%% axies for graphics
-    zax = np.linspace(zmin,  zmax, num=nz,   dtype=myfloat)
-    xax = np.linspace(xmin,  xmax, num=nx,   dtype=myfloat)
+    zax = np.linspace(zmin,  zmax-dz, num=nz,   dtype=myfloat)
+    xax = np.linspace(xmin,  xmax-dx, num=nx,   dtype=myfloat)
     hax = np.linspace(hmin,  hmax, num=nh,   dtype=myfloat)
     tax = np.linspace(tmin,  tmax, num=ntt,  dtype=myfloat)
     sax = np.linspace(-tsrc, tsrc, num=nsrc, dtype=myfloat)
@@ -97,19 +97,52 @@ if __name__=="__main__":
     #%% compares adjoint and inverse reflectivity
     #
     xiadj, limxiadj = readWavefield(folder,'xiadj')
+    xiinv, limxiinv = readWavefield(folder,'xiinv')
+    #
+    if mode1D2D == np.int(1):
+        Fxiadj, limP = readWavefield(folder,'Fxiadj')
+        Fxiinv, limP = readWavefield(folder,'Fxiinv')
+    else:
+        Fxiadj, limP = readWavefield(folder,'Fxiadj_%06i'%(isrc))
+        Fxiinv, limP = readWavefield(folder,'Fxiinv_%06i'%(isrc))
     #
     if mode1D2D==np.int(1):
-        fig2 = plt.figure('test adjoint')
+        fig2 = plt.figure('test adjoint/inverse')
         ax2 = fig2.add_subplot(222)
-        glib.plot_xi_1D(ax2, xiadj, zax, 'xi adjoint')
-    else:
-        fig2 = plt.figure('test adjoint')
+        ax4 = fig2.add_subplot(224)
         ax1 = fig2.add_subplot(221)
-        ax2 = fig2.add_subplot(224)
+        glib.plot_xi_1D(ax2, xiadj, zax, 'xi adjoint')
+        glib.plot_xi_1D(ax4, xiinv, zax, 'xi inverse')
         #
+        ax1.plot(tax,np.squeeze(Pobs)  ,label='Pobs')
+        ax1.plot(tax,np.squeeze(Fxiadj),label='F xiadj')
+        ax1.plot(tax,np.squeeze(Fxiinv),label='F xiinv')
+        ax1.legend()
+        ax1.grid(color='gray')
+        #
+    else:
+        fig2 = plt.figure('test adjoint/inverse')
+        ax1 = fig2.add_subplot(221)
         glib.plot_xi_zx( ax1, xiadj, xmin, xmax, zmin, zmax, title='xiadj')
+        ax2 = fig2.add_subplot(222)
         glib.plot_xi_CIG(ax2, xiadj, xax, hmin, hmax, zmin, zmax, title='xiadj')
+        ax3 = fig2.add_subplot(223)
+        glib.plot_xi_zx( ax3, xiinv, xmin, xmax, zmin, zmax, title='xiinv')
+        ax4 = fig2.add_subplot(224)
+        glib.plot_xi_CIG(ax4, xiinv, xax, hmin, hmax, zmin, zmax, title='xiinv')
         #
+        #
+        #ioff = np.int((noff-1)/2)
+        ioff = np.int(np.floor(3*noff/4))
+        #
+        fig3 = plt.figure('test demigrate')
+        ax1 = fig3.add_subplot(221)
+        #ax2 = fig3.add_subplot(222)
+        #ax3 = fig3.add_subplot(223)
+        glib.plot_trace(ax1, Pobs, tax, isrc, ioff, nsrc, cut=True, mylabel='Pobs')
+        glib.plot_trace(ax1, Fxiadj, tax, isrc, ioff, nsrc, cut=True, mylabel='Fxiadj')
+        glib.plot_trace(ax1, Fxiinv, tax, isrc, ioff, nsrc, cut=True, mylabel='Fxiinv')
+        ax1.legend()
         #ax3 = fig2.add_subplot(2,2,3)
         #glib.plot_wvfld_1D(ax3,np.squeeze(sw),tmin,tmax,zmin,zmax)
         #

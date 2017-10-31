@@ -7,9 +7,57 @@ MODULE modelspace
 #endif
   !
   PRIVATE
-  PUBLIC taperModel, inttolog3, defcfv, VelocityBounds
+  PUBLIC taperModel, Wmodel, WmodelT, defcfv, defcfvW, VelocityBounds,&
+       inttolog3
   !
 CONTAINS
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PURE SUBROUTINE Wmodel(R,S,cfvW,ptap,MethTap,MethTap2,dz,dx,dh,nz,nxx,nh)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(nz,nxx,nh),INTENT(out) :: R
+    REAL(4),DIMENSION(nz,nxx,nh),INTENT(in)  :: S
+    REAL(4),DIMENSION(nz,nxx)   ,INTENT(in)  :: cfvW
+    REAL(4),DIMENSION(5)        ,INTENT(in)  :: ptap
+    REAL(4),INTENT(in) :: dz,dx,dh
+    INTEGER ,INTENT(in) :: nz,nxx,nh,MethTap,MethTap2
+    !Local variables
+    INTEGER :: ih
+    !
+    CALL dev1x(R,S,dz,nz,nxx,nh)
+    !
+    DO ih=1,nh
+       R(:,:,ih)=R(:,:,ih)*(cfvW)
+    END DO
+    !
+    CALL taperModel(R,ptap,MethTap,MethTap2,dz,dx,dh,nz,nxx,nh)
+    !
+  END SUBROUTINE Wmodel
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PURE SUBROUTINE WmodelT(R,S,cfvW,ptap,MethTap,MethTap2,dz,dx,dh,nz,nxx,nh)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(nz,nxx,nh),INTENT(out) :: R
+    REAL(4),DIMENSION(nz,nxx,nh),INTENT(in)  :: S
+    REAL(4),DIMENSION(nz,nxx)   ,INTENT(in)  :: cfvW
+    REAL(4),DIMENSION(5)        ,INTENT(in)  :: ptap
+    REAL(4),INTENT(in)  :: dz,dx,dh
+    INTEGER ,INTENT(in)  :: nz,nxx,nh,MethTap,MethTap2
+    !Local variables
+    REAL(4),DIMENSION(:,:,:),ALLOCATABLE :: temp
+    INTEGER :: ih
+    !
+    ALLOCATE(temp(nz,nxx,nh))
+    temp=-S
+    CALL taperModel(temp,ptap,MethTap,MethTap2,dz,dx,dh,nz,nxx,nh)
+    !
+    DO ih=1,nh
+       temp(:,:,ih)=temp(:,:,ih)*(cfvW)
+    END DO
+    !
+    CALL dev1x(R,temp,dz,nz,nxx,nh)
+    DEALLOCATE(temp)
+  END SUBROUTINE WmodelT
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   PURE SUBROUTINE taperModel(X0,ptap,MethTap,MethTap2,dz,dx,dh,nz,nxx,nh)
     IMPLICIT NONE
@@ -102,6 +150,37 @@ CONTAINS
        cfv=1._4
     END SELECT
   END SUBROUTINE defcfv
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PURE SUBROUTINE defcfvW(cfvW,v,MethXi,mode1D2D,nz,nx)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(nz,nx),INTENT(out) :: cfvW
+    REAL(4),DIMENSION(nz,nx),INTENT(in)  :: v
+    INTEGER                  ,INTENT(in)  :: nz,nx,MethXi,mode1D2D
+    !Local variables
+    SELECT CASE (MethXi)
+    CASE (0)
+       SELECT CASE (mode1D2D)
+       CASE (1)
+          cfvW = -4._4
+       CASE (2)
+          cfvW = -8._4
+       CASE DEFAULT
+          cfvW = 0._4
+       END SELECT
+    CASE (1)
+       SELECT CASE (mode1D2D)
+       CASE (1)
+          cfvW = -16._4/(v**2)
+       CASE (2)
+          cfvW = -32._4/(v**2)
+       CASE DEFAULT
+          cfvW = 0._4
+       END SELECT
+    CASE DEFAULT
+       cfvW = 0._4
+    END SELECT
+  END SUBROUTINE defcfvW
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   SUBROUTINE VelocityBounds(v,vmin,vmax,comm,nz,nx)
     IMPLICIT NONE

@@ -1,9 +1,9 @@
 MODULE linop
   !
-  use propag, only : calcPropag, calcS0, calcKP1, calcQ
-  use modelspace, only : defcfv, VelocityBounds, taperModel
-  use dataspace, only : srcminmax, projectDobs, projectD, taperData, calcKL3
-  use outdata!, only !: outmatrix, outmatrix3
+  use propag, only : calcPropag, calcKP1, calcQ, calcS0, calcS0W, calcKL3, calcKL3W
+  use modelspace, only : defcfv, defcfvW, VelocityBounds, taperModel, Wmodel, WmodelT
+  use dataspace, only : srcminmax, projectDobs, projectD, taperData
+  !use outdata!, only !: outmatrix, outmatrix3
   !
   implicit none
   !
@@ -12,7 +12,7 @@ MODULE linop
 #endif
   !
   private
-  public Flin, Fadj,&
+  public Flin, Fadj, Fdag,&
        ReduceZXH, UnPMeths
   !
 contains
@@ -83,7 +83,7 @@ contains
     DO iis=1,ns
        is=slist(iis)
        !WRITE(UNIT=*,FMT="(4(A,I2))")&
-            !"proc=",rang," iis=",iis,"/",ns," is=",is
+       !"proc=",rang," iis=",iis,"/",ns," is=",is
        CALL srcminmax(xmin,xmax,offmin,offmax,nxx,nrcv2,rcvmin,rcvmax,ispos,&
             nz,nx,noff,is,MethAcq2,comm)
        !-------------------------------
@@ -116,7 +116,7 @@ contains
        !--------------------------------------------
        !---------------- taper data ----------------
        CALL taperData(Aobs,posr,Mtap,ispos,iis,dx,dz,dt,stap,MethMR,MethTapD,&
-            MethAcq2,nsrc,ntt,nrcv2,ns)
+            MethAcq2,nsrc,ntt,nrcv2,ns,.FALSE.)
        !--------------------------------------------
        !------ fill big (output) array -------------
        P(:,rcvmin:rcvmax,iis)=Aobs
@@ -206,7 +206,7 @@ contains
        !-------------------------------------------------------
        !--- taper data ----------------------------------------
        CALL taperData(Aobs,posr,Mtap,ispos,iis,dx,dz,dt,stap,MethMR,MethTapD,&
-            MethAcq2,nsrc,ntt,nrcv2,ns)
+            MethAcq2,nsrc,ntt,nrcv2,ns,.FALSE.)
        !-------------------------------------------------------
        !--- project Dobs space -> D space ---------------------
        CALL projectD(L1,Aobs,posr,zsrc,xr,MethAcq2,dz,nz,nxx,ntt,nrcv2)
@@ -248,6 +248,124 @@ contains
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  SUBROUTINE Fdag(xi,xizero,P,Pzero,v,srcdcnv,rOK,Mtap,ptap,zsrc,dx,dh,dz,dt,ds,&
+       vmin,vmax,PMeths,stap,slist,mode1D2D,comm,npml,noff,nh,&
+       ntt,nz,nx,ns,nsrc,nrcv)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(nz,nx,nh)   ,INTENT(out):: xi
+    LOGICAL                        ,INTENT(out):: xizero
+    REAL(4),DIMENSION(ntt,nrcv,ns),INTENT(in) :: P
+    REAL(4),DIMENSION(nz,nx)      ,INTENT(in) :: v
+    REAL(4),DIMENSION(nsrc)       ,INTENT(in) :: srcdcnv
+    REAL(4),DIMENSION(5)          ,INTENT(in) :: ptap
+    REAL(4),DIMENSION(5)          ,INTENT(in) :: Mtap
+    REAL(4),DIMENSION(ns)         ,INTENT(in) :: stap
+    INTEGER ,DIMENSION(ns)         ,INTENT(in) :: slist
+    INTEGER ,DIMENSION(9)          ,INTENT(in) :: PMeths
+    LOGICAL ,DIMENSION(nrcv,ns)    ,INTENT(in) :: rOK
+    !CHARACTER(len=6)               ,INTENT(in) :: folder
+    REAL(4),INTENT(in) :: zsrc,dx,dh,dz,dt,ds,vmin,vmax
+    INTEGER ,INTENT(in) :: ntt,nz,noff,nh,nx,ns,npml,nsrc,nrcv,comm,mode1D2D
+    LOGICAL ,INTENT(in) :: Pzero
+    !Local varibles
+    REAL(4),DIMENSION(:,:,:)  ,ALLOCATABLE :: P0,L1,Q0,tmpZXHS
+    REAL(4),DIMENSION(:,:,:)  ,ALLOCATABLE :: X0,Y0
+    REAL(4),DIMENSION(:,:)    ,ALLOCATABLE :: Aobs
+    REAL(4),DIMENSION(:,:)    ,ALLOCATABLE :: cfvW,V0,V4
+    LOGICAL ,DIMENSION(:)      ,ALLOCATABLE :: posr
+    INTEGER :: is,iis,xmin,xmax,offmin,offmax,nxx,xr,nrcv2,rcvmin,rcvmax,&
+         ispos
+    INTEGER :: MethJxi,MethXi,MethTap,MethTap2,MethMR,MethTapD,MethQ,MethDcnv,&
+         MethAcq2
+    INTEGER :: rang,orderQ1
+    LOGICAL :: forward,backward
+    !
+#ifdef do_mpi
+    INTEGER :: code
+    CALL MPI_COMM_RANK(comm,rang,code)
+#else
+    rang = 0 + 0*comm
+#endif
+    xi(:,:,:)=0._4
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    IF (Pzero) THEN
+       xizero=.TRUE. ; RETURN
+    ELSE
+       xizero=.FALSE.
+    END IF
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    CALL UnPMeths(PMeths,MethJxi,MethXi,MethTap,MethTap2,MethMR,MethTapD,&
+         MethQ,MethDcnv,MethAcq2)
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    CALL VelocityBounds(v,vmin,vmax,comm,nz,nx)
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    ! Initialization
+    ALLOCATE(tmpZXHS(nz,nx,nh),cfvW(nz,nx))
+    CALL defcfvW(cfvW,v,MethXi,mode1D2D,nz,nx)
+    tmpZXHS(:,:,:) = 0._4
+    forward  = .TRUE.
+    backward = .FALSE.
+    orderQ1  = -1
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    ! Loop over sources
+    DO iis=1,ns
+       is=slist(iis)
+       CALL srcminmax(xmin,xmax,offmin,offmax,nxx,nrcv2,rcvmin,rcvmax,ispos,&
+            nz,nx,noff,is,MethAcq2,comm)
+       !-------------------------------------------------------
+       !--- allocations ---------------------------------------
+       ALLOCATE(P0(ntt,nz,nxx),L1(ntt,nz,nxx),Q0(ntt,nz,nxx),&
+            Aobs(ntt,nrcv2),X0(nz,nxx,nh),Y0(nz,nxx,nh),&
+            V0(nz,nxx),V4(nz,nxx),posr(nrcv2))
+       !
+       V0   = v(:,xmin:xmax)
+       V4   = cfvW(:,xmin:xmax)
+       Aobs = P(:,rcvmin:rcvmax,iis)
+       posr = rOK(rcvmin:rcvmax,iis)
+       !-------------------------------------------------------
+       !--- taper data ----------------------------------------
+       CALL taperData(Aobs,posr,Mtap,ispos,iis,dx,dz,dt,stap,MethMR,MethTapD,&
+            MethAcq2,nsrc,ntt,nrcv2,ns,.TRUE.)
+       !-------------------------------------------------------
+       !--- project Dobs space -> D space ---------------------
+       CALL projectD(L1,Aobs,posr,zsrc,xr,MethAcq2,dz,nz,nxx,ntt,nrcv2)
+       !-------------------------------------------------------
+       !--- backpropagate data (L1 wavefield) -----------------
+       CALL calcKL3W(Q0,L1,zsrc,xr,dz,dx,MethAcq2,ntt,nz,nxx)
+       CALL calcPropag(L1,Q0,V0,vmin,vmax,dx,dz,dt,backward,mode1D2D,&
+            npml,nxx,nz,ntt)
+       !-------------------------------------------------------
+       !--- forward propagate source wavelet (P0 wavefield) ---
+       CALL calcS0W(Q0,srcdcnv,zsrc,is,dz,dx,noff,ntt,nz,nxx,nsrc)
+       CALL calcPropag(P0,Q0,V0,vmin,vmax,dx,dz,dt,forward,mode1D2D,&
+            npml,nxx,nz,ntt)
+       !-------------------------------------------------------
+       !--- Compute correlation between P0 and L1 wavefields --
+       CALL calcQ(Y0,P0,L1,orderQ1,dt,nh,ntt,nz,nxx)
+       !-------------------------------------------------------
+       !--- taper reflectivity models and apply coeff fct of v
+       CALL Wmodel(X0,Y0,V4,ptap,MethTap,MethTap2,dz,dx,dh,nz,nxx,nh)
+       !-------------------------------------------------------
+       !--- adds the results into tmpZXHS ---------------------
+       tmpZXHS(:,xmin:xmax,:)=tmpZXHS(:,xmin:xmax,:)+X0!*stap(iis)
+       !-------------------------------------------------------
+       !--- Deallocations -------------------------------------
+       DEALLOCATE(P0,L1,Q0,Aobs,X0,Y0,V0,V4,posr)
+    END DO
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    !--------------Reduce over processors-------------------
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    CALL ReduceZXH(xi,tmpZXHS,dx,comm,nz,nx,nh)
+    xi = xi*ds
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    !--------------Deallocations----------------------------
+    DEALLOCATE(tmpZXHS,cfvW)
+    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  END SUBROUTINE Fdag
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -269,7 +387,7 @@ contains
     MethDcnv=PMeths(8)
     MethAcq2=PMeths(9)
   END SUBROUTINE UnPMeths
-    !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -294,6 +412,6 @@ contains
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  
+
   !
 END MODULE linop

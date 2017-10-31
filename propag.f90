@@ -8,7 +8,8 @@ MODULE propag
   !include "param.h"
   !
   PRIVATE
-  PUBLIC calcS0, calcPropag, calcKP1, calcQ
+  PUBLIC calcPropag, calcKP1, calcQ, calcS0, calcS0W, calcKL3, calcKL3W,&
+       DerivZ, DerivX
 CONTAINS
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   SUBROUTINE calcKP1(K,P0,xiin,cfv,dh,dt,xizero,order,backforw,mode1D2D,&
@@ -87,35 +88,35 @@ CONTAINS
   END SUBROUTINE calcKP1
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !PURE SUBROUTINE calcQ_1D(Q,P,L,orderQ,dt,nh,ntt,nz,nx)
-    !IMPLICIT NONE
-    !!Parameters
-    !REAL(4),DIMENSION(nz,nx,nh) ,INTENT(out) :: Q
-    !REAL(4),DIMENSION(ntt,nz,nx),INTENT(in)  :: P,L
-    !REAL(4)                     ,INTENT(in)  :: dt
-    !INTEGER                      ,INTENT(in)  :: nx,nz,nh,ntt,orderQ
-    !!Local variables
-    !REAL(4),DIMENSION(:,:,:),ALLOCATABLE :: Pder
-    !!INTEGER :: ih,nh2,xmin,xmax,lmin,pmin,ix,nxx,iz
-    !!
-    !!nh2=(nh-1)/2
-    !!
-    !ALLOCATE(Pder(ntt,nz,nx))
-    !!
-    !SELECT CASE (orderQ)
-    !CASE (-1)
-    !   CALL int1x(Pder,P,dt,ntt,nz,nx)
-    !CASE (2)
-    !   CALL dev2x(Pder,P,dt,ntt,nz,nx)
-    !CASE DEFAULT
-    !   Pder(:,:,:) = 0._4
-    !END SELECT
-    !!
-    !Q(:,:,:)=0._4
-    !!
-    !Q(:,:,1)=dt*SUM(Pder*L,dim=1)
-    !!
-    !DEALLOCATE(Pder)
-    !!
+  !IMPLICIT NONE
+  !!Parameters
+  !REAL(4),DIMENSION(nz,nx,nh) ,INTENT(out) :: Q
+  !REAL(4),DIMENSION(ntt,nz,nx),INTENT(in)  :: P,L
+  !REAL(4)                     ,INTENT(in)  :: dt
+  !INTEGER                      ,INTENT(in)  :: nx,nz,nh,ntt,orderQ
+  !!Local variables
+  !REAL(4),DIMENSION(:,:,:),ALLOCATABLE :: Pder
+  !!INTEGER :: ih,nh2,xmin,xmax,lmin,pmin,ix,nxx,iz
+  !!
+  !!nh2=(nh-1)/2
+  !!
+  !ALLOCATE(Pder(ntt,nz,nx))
+  !!
+  !SELECT CASE (orderQ)
+  !CASE (-1)
+  !   CALL int1x(Pder,P,dt,ntt,nz,nx)
+  !CASE (2)
+  !   CALL dev2x(Pder,P,dt,ntt,nz,nx)
+  !CASE DEFAULT
+  !   Pder(:,:,:) = 0._4
+  !END SELECT
+  !!
+  !Q(:,:,:)=0._4
+  !!
+  !Q(:,:,1)=dt*SUM(Pder*L,dim=1)
+  !!
+  !DEALLOCATE(Pder)
+  !!
   !END SUBROUTINE calcQ_1D
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -253,5 +254,84 @@ CONTAINS
     S0(:,:,:)=0._4
     S0(1:nsrc,izsrc,ispos)=src/(dx*dz)
   END SUBROUTINE calcS0
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PURE SUBROUTINE calcS0W(S0W,srcdcnv,zsrc,is,dz,dx,noff,ntt,nz,nxx,nsrc)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(ntt,nz,nxx),INTENT(out) :: S0W
+    REAL(4),DIMENSION(nsrc)      ,INTENT(in)  :: srcdcnv
+    REAL(4),INTENT(in) :: dz,dx,zsrc
+    INTEGER ,INTENT(in) :: ntt,nz,nxx,nsrc,is,noff
+    !Local variables
+    REAL(4),DIMENSION(:,:,:),ALLOCATABLE :: S0
+    !
+    ALLOCATE(S0(ntt,nz,nxx))
+    CALL calcS0(S0,srcdcnv,zsrc,is,dz,dx,noff,ntt,nz,nxx,nsrc)
+    CALL DerivZ(S0W,S0,zsrc,dz,ntt,nz,nxx)
+    DEALLOCATE(S0)
+  END SUBROUTINE calcS0W
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PURE SUBROUTINE calcKL3(K,S,dz,ntt,nz,nx)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(ntt,nz,nx),INTENT(out) :: K
+    REAL(4),DIMENSION(ntt,nz,nx),INTENT(in)  :: S
+    REAL(4)                     ,INTENT(in)  :: dz
+    INTEGER                      ,INTENT(in)  :: nx,nz,ntt
+    !Local variables
+    K=S/dz
+  END SUBROUTINE calcKL3
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  SUBROUTINE calcKL3W(K,S,zsrc,xr,dz,dx,MethAcq2,ntt,nz,nx)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(ntt,nz,nx),INTENT(out) :: K
+    REAL(4),DIMENSION(ntt,nz,nx),INTENT(in)  :: S
+    REAL(4)                     ,INTENT(in)  :: dz,dx,zsrc
+    INTEGER                      ,INTENT(in)  :: nx,nz,ntt,xr,MethAcq2
+    !Local variables
+    REAL(4),DIMENSION(:,:,:),ALLOCATABLE :: Q
+    !
+    ALLOCATE(Q(ntt,nz,nx))
+    Q=S/dz
+    IF (MethAcq2.EQ.0) THEN ! surface acquisition
+       CALL DerivZ(K,Q,zsrc,dz,ntt,nz,nx)
+    ELSE ! VSP acquisition
+       CALL DerivX(K,Q,xr,dx,ntt,nz,nx)
+    END IF
+    DEALLOCATE(Q)
+  END SUBROUTINE calcKL3W
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  PURE SUBROUTINE DerivZ(Q,P,zsrc,dz,ntt,nz,noff)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(ntt,nz,noff),INTENT(out) :: Q
+    REAL(4),DIMENSION(ntt,nz,noff),INTENT(in)  :: P
+    REAL(4)                       ,INTENT(in)  :: dz,zsrc
+    INTEGER                        ,INTENT(in)  :: ntt,nz,noff
+    !Local variables
+    INTEGER :: izsrc
+    izsrc  = FLOOR(zsrc/dz) + 1
+    !
+    Q(:,:,:) = 0._4
+    Q(:,izsrc-1,:) = -P(:,izsrc,:)/(2._4*dz)
+    Q(:,izsrc+1,:) =  P(:,izsrc,:)/(2._4*dz)
+    !Q(:,izsrc,:)=P(:,izsrc,:)
+  END SUBROUTINE DerivZ
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  SUBROUTINE DerivX(Q,P,xr,dx,ntt,nz,noff)
+    IMPLICIT NONE
+    !Parameters
+    REAL(4),DIMENSION(ntt,nz,noff),INTENT(out) :: Q
+    REAL(4),DIMENSION(ntt,nz,noff),INTENT(in)  :: P
+    REAL(4)                       ,INTENT(in)  :: dx
+    INTEGER                        ,INTENT(in)  :: ntt,nz,noff,xr
+    !Local variables
+    !
+    Q(:,:,:)=0._4
+    Q(:,:,xr-1)=-P(:,:,xr)/(2._4*dx)
+    Q(:,:,xr+1)=P(:,:,xr)/(2._4*dx)
+    Q=-Q
+  END SUBROUTINE DerivX
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 END MODULE propag

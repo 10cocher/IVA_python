@@ -66,9 +66,10 @@ def repartSource(sOK,nb_procs,rang):
     """
     nx = sOK.shape[0]
     nstotal = np.count_nonzero(sOK)
-    dstotal = quad(1)/quad(nstotal)
+    #dstotal = quad(1)/quad(nstotal)
     #
-    staptotal = dstotal * np.ones((nx,), dtype=myfloat, order='F')
+    #staptotal = dstotal * np.ones((nx,), dtype=myfloat, order='F')
+    staptotal = np.ones((nx,), dtype=myfloat, order='F')
     #
     quotient, reste = np.divmod(nstotal, nb_procs)
     if (rang+1 > reste):

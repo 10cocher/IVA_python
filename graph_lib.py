@@ -74,6 +74,18 @@ def plot_Pobs(ax, P, tax, tmin, tmax, offmin, offmax, nsrc, mode1D2D, cut=True):
     #
     ax.grid(color='gray')
 
+def plot_trace(ax, P, tax, isrc, ioff, nsrc, cut=True, mylabel=''):
+    nsrc2 = np.int((nsrc-1)/2)
+    if cut:
+        itmin = nsrc2
+    else:
+        itmin = 0
+    #
+    trace = np.squeeze(P[:,ioff])
+    ax.plot(trace[itmin:],tax[itmin:],label=mylabel)
+    ax.set_ylabel('time (s)')
+    ax.grid(color='gray')
+
 def plot_xi_1D(ax, xi, zax, title='xi'):
     ax.plot(zax,np.squeeze(xi))
     ax.set_xlabel('depth (m)')

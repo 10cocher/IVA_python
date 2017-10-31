@@ -131,7 +131,7 @@ if __name__=="__main__":
         xmin = quad(0) ; xmax = quad(0) ; dx = quad(1) ; nx = np.int(1)
         hmin = quad(0) ; hmax = quad(0) ; dh = quad(1) ; nh = np.int(1)
     #%% temporal dimension
-    tmin = quad(0) ; tmax=quad(0.5) ; dt=quad(0.001) ; nt=np.int(np.floor((tmax-tmin)/dt))
+    tmin = quad(0) ; tmax=quad(0.5) ; dt=quad(0.0013) ; nt=np.int(np.floor((tmax-tmin)/dt))
     #%% simulation of wave propagation around source bewteen -maxoffR and +maxoffR
     maxoffR = quad(600) # in meters
     if mode1D2D == np.int(1):
@@ -144,11 +144,14 @@ if __name__=="__main__":
     # lateral position of sources
     # typically every 'ds' between xSlim[0] and xSlim[1] and between xSlim[2] and xSlim[3]
     xSlim = np.array([xmin, 450., 450., xmax], dtype=myfloat)
-    ds = np.int(8)
+    dsint = np.int(8)
+    if mode1D2D == np.int(1):
+        dsint = np.int(1)
+    ds = quad(dsint)
     sOKs = False # forces symmetric sources repartition
     sOKf = False # forces sources to be at xSlim[1] and xSlim[2]
     # lateral positions of the sources on the grid
-    sOK, nstotal = acquisition.okSource(xSlim,dx,nx,ds,sOKs,sOKf,mode1D2D)
+    sOK, nstotal = acquisition.okSource(xSlim,dx,nx,dsint,sOKs,sOKf,mode1D2D)
     # repartition of sources between processors
     slist, stap = acquisition.repartSource(sOK,nb_procs,rank)
     ns = slist.shape[0]
@@ -191,7 +194,7 @@ if __name__=="__main__":
         print('     nt = %4i ; dt = %5.3f ms (positive time samples)' %(nt,dt*1000), flush=True)
         print('    ntt = %4i (neg. and pos. time samples)' %(ntt), flush=True)
         print('   nsrc = %4i (number of time samples for src wavelet)' %(nsrc), flush=True)
-        print('nstotal = %4i ; ds = %2i (total number of sources in the acquisition)' %(nstotal,ds), flush=True)
+        print('nstotal = %4i ; ds = %2i (total number of sources in the acquisition)' %(nstotal,dsint), flush=True)
         print('     ns = %4i (number of sources treated by this processor)' %(ns), flush=True)
         print('   nrcv = %4i' %(nrcv), flush=True)
         print('   noff = %4i' %(noff), flush=True)
@@ -200,7 +203,7 @@ if __name__=="__main__":
     if rank == np.int(0):
         f = open(folder + 'param.pckl', 'wb')
         pickle.dump([nz, nx, nh, nt, ntt, nsrc, nstotal, ns, nrcv, noff,\
-                     dz, dx, dh, dt, ds,\
+                     dz, dx, dh, dt, dsint,\
                      zmin, zmax, xmin, xmax, hmin, hmax, tmin, tmax, tsrc,\
                      vmin, vmax, mode1D2D,\
                      ], f)
@@ -255,6 +258,15 @@ if __name__=="__main__":
     t2 = time.time()
     if rank == np.int(0):
         print('Fadj took %8.3f seconds' %(t2-t1), flush=True)
+    #%% Migration (using adjoint operator Fdag)
+    t1 = time.time()
+    xiinv, xizero = prop.linop.fdag(Pobs,Pobszero,vini,srcdcnv,rOK,Mtap,ptap,zsrc,\
+                                 dx,dh,dz,dt,ds,vmin,vmax,PMeths,stap,slist,\
+                                 mode1D2D,fcomm,npml,noff,nh)
+    t2 = time.time()
+    if rank == np.int(0):
+        print('Fdag took %8.3f seconds' %(t2-t1), flush=True)
+
     #%% Save results
     #--- Pobs ---
     for isrc in np.arange(0, ns, dtype=int):
@@ -266,8 +278,25 @@ if __name__=="__main__":
             np.save(name,Pobs[:,:,isrc])
     #--- xi adjoint ---
     if (rank == np.int(0)):
-        name = folder + 'xiadj' + '.npy'
-        np.save(name,xiadj)
+        np.save(folder + 'xiadj.npy',xiadj)
+        np.save(folder + 'xiinv.npy',xiinv)
+    #%% demigration
+    print('Demigration...',flush=True)
+    Fxiadj, Pzero = prop.linop.flin(xiadj,xizero,vini,src,rOK,Mtap,ptap,\
+                                     zsrc,dx,dh,dz,dt,vmin,vmax,PMeths,\
+                                     stap,slist,mode1D2D,fcomm, npml,noff,ntt)
+    Fxiinv, Pzero = prop.linop.flin(xiinv,xizero,vini,src,rOK,Mtap,ptap,\
+                                     zsrc,dx,dh,dz,dt,vmin,vmax,PMeths,\
+                                     stap,slist,mode1D2D,fcomm, npml,noff,ntt)
+    for isrc in np.arange(0, ns, dtype=int):
+        if mode1D2D == np.int(1):
+            np.save(folder + 'Fxiadj.npy',Fxiadj)
+            np.save(folder + 'Fxiinv.npy',Fxiinv)
+        if mode1D2D == np.int(2):
+            name = folder + 'Fxiadj_%06i' %(slist[isrc]) + '.npy'
+            np.save(name,Fxiadj[:,:,isrc])
+            name = folder + 'Fxiinv_%06i' %(slist[isrc]) + '.npy'
+            np.save(name,Fxiinv[:,:,isrc])
     #%%
     #mystop(do_mpi,comm,rank)
     #%%

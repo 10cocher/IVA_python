@@ -88,22 +88,11 @@ CONTAINS
     END SELECT
     !
   END SUBROUTINE projectD
-  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  PURE SUBROUTINE calcKL3(K,S,dz,ntt,nz,nx)
-    IMPLICIT NONE
-    !Parameters
-    REAL(4),DIMENSION(ntt,nz,nx),INTENT(out) :: K
-    REAL(4),DIMENSION(ntt,nz,nx),INTENT(in)  :: S
-    REAL(4)                     ,INTENT(in)  :: dz
-    INTEGER                      ,INTENT(in)  :: nx,nz,ntt
-    !Local variables
-    K=S/dz
-  END SUBROUTINE calcKL3
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   PURE SUBROUTINE taperData(P,rOK,Mtap,ispos,iis,dx,dz,dt,stap,&
-       MethMR,MethTapD,MethAcq2,nsrc,ntt,nrcv2,ns)
+       MethMR,MethTapD,MethAcq2,nsrc,ntt,nrcv2,ns,mode)
     IMPLICIT NONE
     !Parameters
     REAL(4),DIMENSION(ntt,nrcv2),INTENT(inout) :: P
@@ -112,24 +101,36 @@ CONTAINS
     LOGICAL ,DIMENSION(nrcv2)    ,INTENT(in)    :: rOK
     REAL(4),INTENT(in) :: dx,dz,dt
     INTEGER ,INTENT(in) :: ntt,nsrc,nrcv2,MethMR,MethTapD,MethAcq2,iis,ispos,ns
+    LOGICAL ,INTENT(in) :: mode ! false = usual ; true = special for inverse
     !Local variables
     REAL(4),DIMENSION(:,:),ALLOCATABLE :: MR
+    REAL(4),DIMENSION(:)  ,ALLOCATABLE :: MtapInv
+    INTEGER :: MethTapDInv
     !
-    ALLOCATE(MR(ntt,nrcv2))
+    ALLOCATE(MR(ntt,nrcv2),MtapInv(5))
     !
-    CALL defMR2(MR,rOK,Mtap,ispos,dx,dz,dt,nsrc,ntt,nrcv2,&
-         MethMR,MethTapD,MethAcq2)
+    MtapInv = Mtap
+    !
+    IF (mode) THEN ! for inverse
+       MethTapDinv = 0
+       MtapInv(1) = -Mtap(1)
+    ELSE
+       MethTapDinv = MethTapD
+    END IF
+    !
+    CALL defMR2(MR,rOK,MtapInv,ispos,dx,dz,dt,MethMR,MethTapDInv,MethAcq2,&
+         nsrc,ntt,nrcv2)
     !
     P=P*MR*stap(iis)
     !
-    DEALLOCATE(MR)
+    DEALLOCATE(MR,MtapInv)
     !
   END SUBROUTINE taperData
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  PURE SUBROUTINE defMR2(MR,rOK,Mtap,ispos,dx,dz,dt,nsrc,ntt,nrcv2,MethMR,MethTapD,&
-       MethAcq2)
+  PURE SUBROUTINE defMR2(MR,rOK,Mtap,ispos,dx,dz,dt,MethMR,MethTapD,MethAcq2,&
+       nsrc,ntt,nrcv2)
     ! normally nrcv2=nz or nrcv2=nxx
     IMPLICIT NONE    
     !Parameters
@@ -144,25 +145,15 @@ CONTAINS
     INTEGER :: nsrc2,it,Tapod,Xapod,ircv,Tapod2!,rang
     LOGICAL :: TaperTime,TaperRcv,DisymTime
     !
-    !#ifdef do_mpi
-    !INTEGER :: code
-    !#endif
-    !!
-    !#ifdef do_mpi
-    !CALL MPI_COMM_RANK(MPI_COMM_WORLD,rang,code)
-    !#else
-    !rang=0
-    !#endif
-    !
     nsrc2=(nsrc-1)/2
     DisymTime=.FALSE.
     Tapod2time=0.7_4
     tmax=REAL(ntt-nsrc2,4)*dt
-    IF (Tapod2time.GT.tmax .AND. DisymTime) THEN
+    !IF (Tapod2time.GT.tmax .AND. DisymTime) THEN
        !IF (rang.EQ.0) THEN
        !WRITE(UNIT=*,FMT="(A)") "Problem for Tapod2 (Tapod2>tmax) in defMR2."
        !END IF
-    END IF
+    !END IF
     Tapod2=FLOOR(Tapod2time/dt)+nsrc2
     !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     SELECT CASE (MethTapD)
